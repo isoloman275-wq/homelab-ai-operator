@@ -5,8 +5,9 @@ hardware** — model sizing, VRAM optimization, inference serving, tiered routin
 watchdogs, and hardware revival. The exact playbooks for turning the machines you
 already own into a sovereign AI stack.
 
-Every procedure here was executed, measured, and debugged on a real 3-node
-homelab (2× RTX 3060, RX 5700 XT 8GB, RX 580 4GB) before being written down —
+Every procedure here was executed, measured, and debugged on a real multi-node
+homelab — mixed NVIDIA and AMD consumer GPUs from 4 GB to 24 GB pooled VRAM —
+before being written down —
 including the failure modes, the VRAM math, and the "don't do what I did" notes.
 
 ## What's inside (free)
