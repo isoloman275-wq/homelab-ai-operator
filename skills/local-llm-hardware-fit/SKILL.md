@@ -11,8 +11,13 @@ window. This skill is the *technique* layer — lab topology + IPs + timetable l
 addresses and render-blocked windows; this skill is how to actually fit a model once you know
 where it goes.
 
+<<<<<<< HEAD
 - **GPU-NODE** = your-gpu-node, Ubuntu, user `llm-user`. **2× RTX 3060 = 24GB pooled (single VRAM pool, models SPAN both GPUs)**. Reachable directly from WSL via SSH (`ssh llm-user@your-gpu-node` or the `ssh m2` alias) and via HTTP `http://YOUR_OLLAMA_HOST:11434`. **GPU-NODE is LINUX — never use cmd.exe/powershell against it** (that was a 30-min session-wasting mistake: Windows commands at a Linux box return garbage).
 - **MAIN-NODE** = this WSL box's Windows host, Ollama at `http://<wsl-gateway-ip>:11434` (WSL gateway), model `ornith:9b`.
+=======
+- **GPU-NODE** = gpu-node-2, Ubuntu, user `llm-user`. **2× RTX 3060 = 24GB pooled (single VRAM pool, models SPAN both GPUs)**. Reachable directly from WSL via SSH (`ssh llm-user@gpu-node-2` or the `ssh m2` alias) and via HTTP `http://gpu-node-2:11434`. **GPU-NODE is LINUX — never use cmd.exe/powershell against it** (that was a 30-min session-wasting mistake: Windows commands at a Linux box return garbage).
+- **MAIN-NODE** = this WSL box's Windows host, Ollama at `http://<wsl-gateway-ip>:11434`, model `ornith:9b`.
+>>>>>>> b3cb1c441f96038851366108f1708cee781bcfa3
 - **AUX-NODE** = aux-node, now **Radeon RX 580 4GB** (was GTX 960; swapped 2026-09-03), Windows, user `Admin` — SSH key auth WORKS (the old "firewalled" note was stale; run Windows commands via `ssh Admin@aux-node 'powershell -NoProfile -Command ...'`, beware quoting hell: write .ps1 locally, pipe in via `$input | Set-Content`, then execute with `-File`). Ollama models: `granite4.1:3b-q4_K_S` (19.5 tok/s, best tool calling) + `qwen3.5:2b-aux` (28.4 tok/s, 100% VRAM @ 64K) + `2b-q4_K_M` spare. **RX 580 ceiling = 2B-class @ 64K**: gfx803/Polaris ROCm only offloads ~50% of 3-4B models (tested qwen3.5:4b → 7 tok/s, unusable). Ollama on AUX-NODE is now the FULL official install (rocm+vulkan dirs); the old stripped CPU-only copy was the reason GPU never engaged. Known quirk: qwen3.5-aux dumps output into the thinking field (empty response).
 
 ## STEP 1 — does the model exist? (check upstream FIRST, not our boxes)
