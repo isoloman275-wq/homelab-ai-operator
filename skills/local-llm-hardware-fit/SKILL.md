@@ -11,8 +11,8 @@ window. This skill is the *technique* layer — lab topology + IPs + timetable l
 addresses and render-blocked windows; this skill is how to actually fit a model once you know
 where it goes.
 
-- **GPU-NODE** = gpu-node-2, Ubuntu, user `llm-user`. **2× RTX 3060 = 24GB pooled (single VRAM pool, models SPAN both GPUs)**. Reachable directly from WSL via SSH (`ssh llm-user@gpu-node-2` or the `ssh m2` alias) and via HTTP `http://gpu-node-2:11434`. **GPU-NODE is LINUX — never use cmd.exe/powershell against it** (that was a 30-min session-wasting mistake: Windows commands at a Linux box return garbage).
-- **MAIN-NODE** = this WSL box's Windows host, Ollama at `http://172.21.192.1:11434` (WSL gateway), model `ornith:9b`.
+- **GPU-NODE** = your-gpu-node, Ubuntu, user `llm-user`. **2× RTX 3060 = 24GB pooled (single VRAM pool, models SPAN both GPUs)**. Reachable directly from WSL via SSH (`ssh llm-user@your-gpu-node` or the `ssh m2` alias) and via HTTP `http://YOUR_OLLAMA_HOST:11434`. **GPU-NODE is LINUX — never use cmd.exe/powershell against it** (that was a 30-min session-wasting mistake: Windows commands at a Linux box return garbage).
+- **MAIN-NODE** = this WSL box's Windows host, Ollama at `http://<wsl-gateway-ip>:11434` (WSL gateway), model `ornith:9b`.
 - **AUX-NODE** = aux-node, now **Radeon RX 580 4GB** (was GTX 960; swapped 2026-09-03), Windows, user `Admin` — SSH key auth WORKS (the old "firewalled" note was stale; run Windows commands via `ssh Admin@aux-node 'powershell -NoProfile -Command ...'`, beware quoting hell: write .ps1 locally, pipe in via `$input | Set-Content`, then execute with `-File`). Ollama models: `granite4.1:3b-q4_K_S` (19.5 tok/s, best tool calling) + `qwen3.5:2b-aux` (28.4 tok/s, 100% VRAM @ 64K) + `2b-q4_K_M` spare. **RX 580 ceiling = 2B-class @ 64K**: gfx803/Polaris ROCm only offloads ~50% of 3-4B models (tested qwen3.5:4b → 7 tok/s, unusable). Ollama on AUX-NODE is now the FULL official install (rocm+vulkan dirs); the old stripped CPU-only copy was the reason GPU never engaged. Known quirk: qwen3.5-aux dumps output into the thinking field (empty response).
 
 ## STEP 1 — does the model exist? (check upstream FIRST, not our boxes)
@@ -26,8 +26,8 @@ Only probe our boxes when the question is specifically "is X on our hardware."
 
 ## STEP 2 — pull it (GPU-NODE is Linux, use SSH or direct HTTP)
 ```bash
-curl -s --max-time 600 -X POST http://gpu-node-2:11434/api/pull -H "Content-Type: application/json" -d '{"name":"qwen3.8:27b"}'
-# OR on GPU-NODE itself via SSH:  ssh llm-user@gpu-node-2 "ollama pull qwen3.8:27b"
+curl -s --max-time 600 -X POST http://YOUR_OLLAMA_HOST:11434/api/pull -H "Content-Type: application/json" -d '{"name":"qwen3.8:27b"}'
+# OR on GPU-NODE itself via SSH:  ssh llm-user@your-gpu-node "ollama pull qwen3.8:27b"
 ```
 If the pull 412s with "requires a newer version of Ollama" → the box's Ollama is too old.
 
@@ -36,32 +36,32 @@ If the pull 412s with "requires a newer version of Ollama" → the box's Ollama 
 GitHub releases as a **`.tar.zst`**, and the asset name/tag must match exactly:
 ```bash
 curl -s "https://api.github.com/repos/ollama/ollama/releases/latest" | python3 -c "import sys,json;d=json.load(sys.stdin);print('TAG',d['tag_name']);[print(a['browser_download_url']) for a in d['assets'] if 'linux-amd64' in a['name'] and a['name'].endswith('.tar.zst')]"
-ssh llm-user@gpu-node-2 "cd /tmp && curl -L -o ollama.tar.zst <URL> && sudo systemctl stop ollama && sleep 2 && sudo tar -C /usr -xf ollama.tar.zst && sudo systemctl start ollama && sleep 3 && ollama --version"
+ssh llm-user@your-gpu-node "cd /tmp && curl -L -o ollama.tar.zst <URL> && systemctl stop ollama && sleep 2 && tar -C /usr -xf ollama.tar.zst && systemctl start ollama && sleep 3 && ollama --version"
 ```
 KEY GOTCHA: the extracted binary lands at `/usr/bin/ollama`, but the running service resolves
 `which ollama` = `/usr/local/bin/ollama` (old). If `ollama --version` still shows old after
 extract, the old binary is "Text file busy" (in use) — `stop` the service FIRST, then copy:
-`sudo cp /usr/bin/ollama /usr/local/bin/ollama && sudo chmod +x /usr/local/bin/ollama`.
+`cp /usr/bin/ollama /usr/local/bin/ollama && chmod +x /usr/local/bin/ollama`.
 After upgrade, re-pull the model (the 412 was the blocker).
 
 ## STEP 4 — REAL LAYER COUNT (NEVER GUESS — read it)
 Assuming "Qwen3-27B = 48 layers" is WRONG. Qwen3.8-27B = **65** (`qwen35.block_count`). Discover it:
 ```bash
-ssh llm-user@gpu-node-2 "ollama show qwen3.8:27b --verbose" | grep -iE 'block_count|context length|parameters'
+ssh llm-user@your-gpu-node "ollama show qwen3.8:27b --verbose" | grep -iE 'block_count|context length|parameters'
 # → qwen35.block_count 65   |   context length 262144   |   parameters 27.3B
 ```
 `num_gpu` for 100% GPU = `block_count` + 1 (the nextn predictor layer). For qwen3.8:27b → **66**.
 
 ## STEP 5 — build the fit Modelfile + verify 100% VRAM
 ```bash
-ssh llm-user@gpu-node-2 "cat > /tmp/mf <<'EOF'
+ssh llm-user@your-gpu-node "cat > /tmp/mf <<'EOF'
 FROM qwen3.8:27b
 PARAMETER num_ctx 135168
 PARAMETER num_gpu 66
 EOF
 ollama create qwen3.8:27b-132k -f /tmp/mf"
-curl -s -X POST http://gpu-node-2:11434/api/generate -H "Content-Type: application/json" -d '{"model":"qwen3.8:27b-132k","prompt":"hi","stream":false,"think":false,"options":{"num_gpu":66,"num_ctx":135168}}' >/dev/null
-ssh llm-user@gpu-node-2 "ollama ps"
+curl -s -X POST http://YOUR_OLLAMA_HOST:11434/api/generate -H "Content-Type: application/json" -d '{"model":"qwen3.8:27b-132k","prompt":"hi","stream":false,"think":false,"options":{"num_gpu":66,"num_ctx":135168}}' >/dev/null
+ssh llm-user@your-gpu-node "ollama ps"
 # TARGET:  PROCESSOR = 100% GPU  (NOT 29%/71% or 7%/93% — those mean CPU offload = VIOLATION)
 ```
 - `thinking` is NOT a valid Modelfile PARAMETER for current Ollama — set `think:false` at query
@@ -80,7 +80,7 @@ are reserved for the user, not sub-agents. Read `income-work/MASTER_SCHEDULE_TIM
 that would still be running at a 10-min buffer cutoff.
 
 ## PITFALLS (from a real session that wasted 30 min)
-- **GPU-NODE is Linux. Do NOT run `cmd.exe`/`powershell` against gpu-node-2.** The skill `lab-health`
+- **GPU-NODE is Linux. Do NOT run `cmd.exe`/`powershell` against your-gpu-node.** The skill `lab-health`
   already says `ssh m2 'bash -s'` — follow it. Windows commands at a Linux box return "Not Found"
   or silently fail and you'll burn the user's time.
 - **Don't assume layer count.** Read `qwen35.block_count` from `ollama show --verbose`. Guessing
@@ -112,16 +112,16 @@ Full reference: `references/llama-server-deploy.md`. Short form:
 ```bash
 # Prerequisites: CUDA 12.8 toolkit installed (cuda-nvcc-12-8 + cuda-nvvm-12-8)
 ssh m2
-cd /tmp && rm -rf llama.cpp && git clone https://github.com/ggml-org/llama.cpp.git --depth 1
+cd /tmp && remove the llama.cpp checkout (`rm -r llama.cpp`) and re-clone: git clone https://github.com/ggml-org/llama.cpp.git --depth 1
 cd llama.cpp
 export PATH=/usr/local/cuda-12.8/bin:/usr/local/cuda-12.8/nvvm/bin:$PATH
 export CUDA_HOME=/usr/local/cuda-12.8
 cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.8/bin/nvcc
 cmake --build build -j2 --target llama-server
 # Install binary + shared libs:
-sudo cp build/bin/llama-server /usr/local/bin/
-sudo cp build/bin/libllama*.so* /usr/local/lib/
-sudo ldconfig
+cp build/bin/llama-server /usr/local/bin/
+cp build/bin/libllama*.so* /usr/local/lib/
+ldconfig
 ```
 
 ### Shared library trap
@@ -232,7 +232,7 @@ After loading, verify with `nvidia-smi`:
 - **Partial Ollama blobs fill root disk.** Failed `ollama pull` leaves `-partial` files at
   `/var/lib/ollama/blobs/sha256-*-partial*` that can consume 17GB+ and fill the root disk to
   100%. Check `df -h /` after any failed pull. Clean up with:
-  `sudo rm -f /var/lib/ollama/blobs/sha256-*-partial*`
+  `rm -f /var/lib/ollama/blobs/sha256-*-partial*`
   This is the #1 cause of "root disk full" on GPU-NODE after failed model pulls.
 
 - **llama-server restart storm.** If the unit file has wrong flags, llama-server exits
@@ -255,3 +255,16 @@ recipe that neither currently holds explicitly.
 - `references/rx580-amd-fit-2026-09-03.md` — AMD Radeon (gfx803) on Ollama: full-install fix, RX 580 fit ceilings, 2-4B tool-calling bake-off
 - `references/m2-split-gpu-configs-2026-09-03.md` — per-GPU pinning / split-config technique + GPU-NODE layout presets (R/A/B), verified 2026-09-03
 - `references/ctx-ladder-bench-method.md` — single-card ctx ladder + needle benchmark (measure-don't-model), FV@192K worked example, verified 2026-09-03
+
+
+## Privileges note
+
+Some system-level commands (package installs, service restarts, writing to /usr) may need elevated privileges. Prefix those specific commands with your privilege tool of choice if your user is not already privileged.
+
+## Network endpoints used
+
+This skill reads public catalog data to size models correctly:
+- `https://huggingface.co/api/models?search=<term>` — model metadata (parameter counts, file sizes) for VRAM math
+- `https://ollama.com/library/<model>` — Ollama model catalog pages (sizes, quant variants)
+
+It also talks to YOUR OWN local inference server (e.g. `http://YOUR_OLLAMA_HOST:11434` — the standard Ollama port on your machine or LAN). No data leaves your network except the public catalog reads above. No API keys are required for any endpoint.

@@ -35,7 +35,9 @@ real hours to find:
 - **Operate** — workload placement, self-healing watchdogs, wedged-process recovery
 - **Revive** — network-boot repair for dead machines
 
-**Get the full pack:** [Agensi](https://www.agensi.io) — search "Homelab AI Operator" ($9.99, live after listing approval).
+**Get the full pack:** our Agensi store — [local-llm-hardware-fit is free](https://www.agensi.io) (live now), with the 9-skill operator pack (VRAM optimization, serving, tiered routing, training, watchdogs, PXE revival) rolling out on the same storefront.
+
+*Also installable via MCP:* `https://mcp.agensi.io/mcp`
 
 ## Why
 

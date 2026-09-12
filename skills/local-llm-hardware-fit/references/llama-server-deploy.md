@@ -1,7 +1,7 @@
 # llama-server Build + Deploy on GPU-NODE
 
 Full build-to-running playbook for llama.cpp llama-server with CUDA on GPU-NODE
-(gpu-node-2, Ubuntu 24.04, 2× RTX 3060 = 24GB pool).
+(your-gpu-node, Ubuntu 24.04, 2× RTX 3060 = 24GB pool).
 
 ## Prerequisites
 
@@ -13,14 +13,14 @@ Full build-to-running playbook for llama.cpp llama-server with CUDA on GPU-NODE
 ### CUDA 12.8 install (if not present)
 ```bash
 # Remove old partial CUDA
-sudo rm -rf /usr/local/cuda-12.8 /usr/local/cuda-12 /usr/local/cuda
+remove the old CUDA directories (e.g. `rm -r /usr/local/cuda-12.8 /usr/local/cuda-12 /usr/local/cuda` — verify the path before running)
 
 # Add NVIDIA repo
 cd /tmp && wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
-sudo dpkg -i cuda-keyring_1.1-1_all.deb && sudo apt-get update
+dpkg -i cuda-keyring_1.1-1_all.deb && apt-get update
 
 # Install full toolkit
-sudo apt-get install -o Dpkg::Options::="--force-overwrite" -y cuda-toolkit-12-8 build-essential cmake
+apt-get install -o Dpkg::Options::="--force-overwrite" -y cuda-toolkit-12-8 build-essential cmake
 ```
 
 The `--force-overwrite` is needed because the `cuda-nvvm-12-8` package shares
@@ -30,7 +30,7 @@ The `--force-overwrite` is needed because the `cuda-nvvm-12-8` package shares
 
 ```bash
 # Clone (shallow, one commit)
-cd /tmp && rm -rf llama.cpp && git clone https://github.com/ggml-org/llama.cpp.git --depth 1
+cd /tmp && remove the llama.cpp checkout (`rm -r llama.cpp`) and re-clone: git clone https://github.com/ggml-org/llama.cpp.git --depth 1
 cd llama.cpp
 
 # Set CUDA 12.8 paths
@@ -53,13 +53,13 @@ These must be copied to the system library path.
 
 ```bash
 # Install binary
-sudo cp /tmp/llama.cpp/build/bin/llama-server /usr/local/bin/llama-server
-sudo chmod +x /usr/local/bin/llama-server
+cp /tmp/llama.cpp/build/bin/llama-server /usr/local/bin/llama-server
+chmod +x /usr/local/bin/llama-server
 
 # Install ALL shared libs (critical — missing any causes status=127)
-sudo cp /tmp/llama.cpp/build/bin/libllama*.so* /usr/local/lib/
-sudo cp /tmp/llama.cpp/build/bin/libmtmd.so* /usr/local/lib/
-sudo ldconfig
+cp /tmp/llama.cpp/build/bin/libllama*.so* /usr/local/lib/
+cp /tmp/llama.cpp/build/bin/libmtmd.so* /usr/local/lib/
+ldconfig
 
 # Verify
 ldd /usr/local/bin/llama-server | grep "not found"
@@ -137,18 +137,18 @@ WantedBy=multi-user.target
 
 ```bash
 # Stop the restart storm (always stop before editing unit file)
-sudo systemctl stop llama-server.service
+systemctl stop llama-server.service
 
 # After editing unit file:
-sudo systemctl daemon-reload
-sudo systemctl start llama-server.service
+systemctl daemon-reload
+systemctl start llama-server.service
 
 # Check status
-sudo systemctl status llama-server.service
+systemctl status llama-server.service
 systemctl is-active llama-server.service
 
 # View logs (do this first when debugging)
-sudo journalctl -u llama-server.service --no-pager -n 20
+journalctl -u llama-server.service --no-pager -n 20
 ```
 
 ## Verification
@@ -194,14 +194,14 @@ whichever loads the model owns the 24GB pool. To switch:
 
 ```bash
 # Stop llama-server (frees VRAM)
-sudo systemctl stop llama-server.service
+systemctl stop llama-server.service
 
 # Load model via Ollama
 ollama run qwen3.8:27b-132k
 
 # OR: stop Ollama and start llama-server
 ollama stop qwen3.8:27b-132k
-sudo systemctl start llama-server.service
+systemctl start llama-server.service
 ```
 
 ## Troubleshooting
@@ -225,6 +225,11 @@ Ollama pulls that fail mid-stream leave partial blobs that fill root disk:
 ls -lh /var/lib/ollama/blobs/*-partial*
 
 # Clean
-sudo rm -f /var/lib/ollama/blobs/sha256-*-partial*
+rm -f /var/lib/ollama/blobs/sha256-*-partial*
 ```
 Always `df -h /` before and after any large model operation.
+
+
+## Privileges note
+
+Some system-level commands (package installs, service restarts, writing to /usr) may need elevated privileges. Prefix those specific commands with your privilege tool of choice if your user is not already privileged.

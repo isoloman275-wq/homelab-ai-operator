@@ -23,29 +23,29 @@ Journal shows the scheduler launches llama-server with
 
 ## Confirm which component is at fault (diagnostic)
 ```bash
-ssh llm-user@gpu-node-2 "strings /usr/local/bin/ollama | grep -c load-mode"        # expect 1 (emits)
-ssh llm-user@gpu-node-2 "strings /usr/local/lib/ollama/llama-server | grep -c load-mode"  # expect 0 (rejects)
+ssh llm-user@your-gpu-node "strings /usr/local/bin/ollama | grep -c load-mode"        # expect 1 (emits)
+ssh llm-user@your-gpu-node "strings /usr/local/lib/ollama/llama-server | grep -c load-mode"  # expect 0 (rejects)
 ```
 
 ## Fix — upgrade Ollama binary only (NO model copies, NO store move)
 0.32.15 (published 2026-08-19, one day after 0.32.14) bundles a llama-server that accepts the
 flag. Binary-only swap:
 ```bash
-ssh llm-user@gpu-node-2 "
+ssh llm-user@your-gpu-node "
 cd /tmp
 curl -sL -o ollama3215.tar.zst https://github.com/ollama/ollama/releases/download/v0.32.15/ollama-linux-amd64.tar.zst
-sudo systemctl stop ollama
+systemctl stop ollama
 tar --zstd -xf ollama3215.tar.zst
-sudo cp /usr/local/bin/ollama /usr/local/bin/ollama.bak.3214
-sudo cp -r /usr/local/lib/ollama /usr/local/lib/ollama.bak.3214
-sudo cp bin/ollama /usr/local/bin/ollama
-sudo rm -rf /usr/local/lib/ollama
-sudo cp -r lib/ollama /usr/local/lib/ollama
-sudo chown -R root:root /usr/local/lib/ollama /usr/local/bin/ollama
-sudo systemctl restart ollama
+cp /usr/local/bin/ollama /usr/local/bin/ollama.bak.3214
+cp -r /usr/local/lib/ollama /usr/local/lib/ollama.bak.3214
+cp bin/ollama /usr/local/bin/ollama
+remove the Ollama lib directory (`rm -r /usr/local/lib/ollama` — verify the path first)
+cp -r lib/ollama /usr/local/lib/ollama
+chown -R root:root /usr/local/lib/ollama /usr/local/bin/ollama
+systemctl restart ollama
 "
 # Verify
-curl -s -X POST http://gpu-node-2:11434/api/generate -H "Content-Type: application/json" \
+curl -s -X POST http://YOUR_OLLAMA_HOST:11434/api/generate -H "Content-Type: application/json" \
   -d '{"model":"qwen3.8:27b-132k","prompt":"say OK","stream":false,"think":false,"options":{"num_ctx":8192}}'
 # → HTTP 200, response "OK"
 ```
@@ -58,7 +58,7 @@ curl -s -X POST http://gpu-node-2:11434/api/generate -H "Content-Type: applicati
   broke the whole lab. GPU-NODE has 26G free on `sda2` as of 2026-08-20; the binary upgrade needs
   ~1.4GB temp in `/tmp` only.
 - **Do NOT assume `ornith:35b` or any other model is a fallback** — verify with
-  `curl http://gpu-node-2:11434/api/tags` first. Stale memory claimed `ornith:35b` was live;
+  `curl http://YOUR_OLLAMA_HOST:11434/api/tags` first. Stale memory claimed `ornith:35b` was live;
   it was NOT (only `qwen3.8:27b-132k` exists).
 
 ## Search-first discipline (user correction)
@@ -69,3 +69,8 @@ curl -s "https://api.github.com/repos/ollama/ollama/releases?per_page=8"  # find
 ```
 The user's words: "go fetch more information about the model instead of guessing" and
 "I just asked google and can see a bunch of solutions maybe you could do a search."
+
+
+## Privileges note
+
+Some system-level commands (package installs, service restarts, writing to /usr) may need elevated privileges. Prefix those specific commands with your privilege tool of choice if your user is not already privileged.
