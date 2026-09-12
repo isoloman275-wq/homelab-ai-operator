@@ -18,17 +18,14 @@ including the failure modes, the VRAM math, and the "don't do what I did" notes.
 
 ## The full pack (9 more skills)
 
-| Skill | What it teaches |
-|---|---|
-| `ollama-fit-optimizer` | Tune any model to 100% VRAM residency + max context |
-| `llama-server-ops` | llama.cpp serving: context configs, health checks, deploy units |
-| `local-llm-workloads` | Which workloads run on which class of node |
-| `model-routing` | Tiered local→cloud routing that keeps API costs near zero |
-| `local-llm-training` | LoRA/QLoRA fine-tuning on consumer cards |
-| `automation-health-monitoring` | Watchdogs that actually heal, not status flags that lie |
-| `hermes-process-reaper` | Wedged-process cleanup without killing live work |
-| `pxe-network-repair` | Network-boot a dead PC over LAN |
-| `pxe-windows-repair` | Full PXE → Windows reinstall pipeline |
+The complete operator stack — every procedure battle-tested on real hardware,
+including the VRAM math, benchmark tables, and the failure modes that cost
+real hours to find:
+
+- **Optimize** — max-VRAM model tuning, inference serving, tiered local→cloud routing
+- **Train** — LoRA/QLoRA fine-tuning on consumer GPUs
+- **Operate** — workload placement, self-healing watchdogs, wedged-process recovery
+- **Revive** — network-boot repair for dead machines
 
 **Get the full pack:** [Agensi](https://www.agensi.io) — search "Homelab AI Operator" ($9.99, live after listing approval).
 
